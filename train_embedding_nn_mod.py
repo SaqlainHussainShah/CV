@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from scipy import random
 # import pandas as pd
 config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.7
+config.gpu_options.per_process_gpu_memory_fraction = 0.8
 FLAGS = None
 
 
@@ -53,6 +53,46 @@ def read_file_org_test(file_name):
             label_lst.append(count)
     return feat_lst, label_lst
 
+
+def create_pairs(face_data, voice_data, labels_faces, labels_voices):
+    voice_features = []
+    face_features = []
+    pair_labels = []
+    try:    
+        for voice_index in range(int(float(len(voice_data)))):
+            counter = 0
+            voice = voice_data[voice_index]
+            face_start_index = 5 * voice_index
+            face_end_index = face_start_index + 5
+            try:
+                for face in face_data[face_start_index:face_end_index]:
+                    voice_features.append(voice)
+                    face_features.append(face)
+                    pair_labels.append(labels_voices[voice_index])
+                    # if counter < 3:
+                    #     # paired_data.append([[face], [voice]])
+                    #     voice_features.append(voice)
+                    #     face_features.append(face)
+                    #     pair_labels.append(int(1))
+                        
+                    # else:
+                    #     # paired_data.append([[face], [voice_data[-(face_start_index + counter)]]])
+                    #     face_features.append(face)
+                    #     voice_features.append(voice_data[-(face_start_index + counter)])
+                    #     if labels_face[face_start_index + counter] == labels_voices[-(face_start_index + counter)]:
+                    #         pair_labels.append(int(1))
+                    #     else:
+                    #          pair_labels.append(int(0))
+                    # counter += 1
+            except Exception as excp:
+                print("ERROR in inner loop of creating pairs ===========")
+                print(excp)
+    except Exception as excp:
+        print("Error in outer loop of create pair function =====")
+        print(excp)
+        
+    return face_features, voice_features, pair_labels
+
 def main(_):
     
     # im_feats= tf.placeholder(tf.float32, shape=[None])
@@ -67,20 +107,22 @@ def main(_):
     im_feat_dim = 4096
     sent_feat_dim = 1024
 
-    train_file = 'E:/saqlain/face_train.csv'
-    train_file_voice = 'E:/saqlain/wav_train.csv'
+    train_file = 'E:/saqlain/face_test.csv'
+    train_file_voice = 'E:/saqlain/wav_test.csv'
 
     # test_file = '/home/shah/pycharm-projects/mlp/train_test/faceTest.csv'
     # test_file_voice = '/home/shah/pycharm-projects/mlp/train_test/voiceTest.csv'
 
-    img_train, train_label = read_file_org(train_file)
-    voice_train, _ = read_file_org(train_file_voice)
+    img_train, labels_faces = read_file_org(train_file)
+    voice_train, labels_voices = read_file_org(train_file_voice)
     # img_test, test_label = read_file_org_test(test_file)
     # img_test_voice, _ = read_file_org_test(test_file_voice)
 
+    img_train, voice_train, pair_labels = create_pairs(img_train, voice_train, labels_faces, labels_voices)
+
     le = preprocessing.LabelEncoder()
-    le.fit(train_label)
-    train_label = le.transform(train_label)
+    le.fit(pair_labels)
+    train_label = le.transform(pair_labels)
 
 
     print("Train file length", len(img_train))
@@ -141,6 +183,7 @@ def main(_):
     cent_loss = []
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
+
         for i in range(5):
             for idx in range(num_of_batches):
                 im_feats, batch_labels = get_batch(idx, FLAGS.batch_size, train_label, img_train)
@@ -185,14 +228,14 @@ if __name__ == '__main__':
     # Dataset and checkpoints.
     parser.add_argument('--image_feat_path', type=str, help='Path to the image feature mat file.')
     parser.add_argument('--sent_feat_path', type=str, help='Path to the sentence feature mat file.')
-    parser.add_argument('--save_dir', type=str, default='./orgplot_3/', help='Directory for saving checkpoints.')
+    parser.add_argument('--save_dir', type=str, default='./orgplot_pair_5/', help='Directory for saving checkpoints.')
     parser.add_argument('--restore_path', type=str, help='Path to the restoring checkpoint MetaGraph file.')
     # Training parameters.
     parser.add_argument('--batch_size', type=int, default=1024, help='Batch size for training.')
-    parser.add_argument('--sample_size', type=int, default=2, help='Number of positive pair to sample.')
+    parser.add_argument('--sample_size', type=int, default=5, help='Number of positive pair to sample.')
     parser.add_argument('--max_num_epoch', type=int, default=20, help='Max number of epochs to train.')
     parser.add_argument('--num_neg_sample', type=int, default=10, help='Number of negative example to sample.')
-    parser.add_argument('--margin', type=float, default=0.5, help='Margin.')
+    parser.add_argument('--margin', type=float, default=1.5, help='Margin.')
     parser.add_argument('--im_loss_factor', type=float, default=1.5,
                         help='Factor multiplied with image loss. Set to 0 for single direction.')
     parser.add_argument('--sent_only_loss_factor', type=float, default=0.05,
